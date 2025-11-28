@@ -192,7 +192,8 @@ Additionally, alignment issues between the kinematic model and the Unity coordin
 This section provides an overview of the 3-DOF Drawing Robot System, including its key components and how they interact to achieve the goal of drawing predefined shapes. Below is a diagram that illustrates the structure and workflow of the system.
 
 ### System Diagram
-<img width="1919" height="642" alt="image" src="https://github.com/user-attachments/assets/3b532c49-fa46-4e50-a9fd-5e041be1e645" />
+<img width="1892" height="607" alt="image" src="https://github.com/user-attachments/assets/9ee08021-51c7-4a36-872a-c1318d871712" />
+
 
 ### Key Components 
 
