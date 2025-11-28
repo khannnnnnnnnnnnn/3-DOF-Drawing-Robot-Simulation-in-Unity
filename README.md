@@ -222,6 +222,8 @@ Click the link below to download the Unity build:
 
 🔗 **[Download Simulation (Google Drive)](https://drive.google.com/drive/folders/19nDmi6M2uW3-X1BZ3VPevm-cb-oeUpgr?usp=sharing)**
 
+<img width="1883" height="677" alt="image" src="https://github.com/user-attachments/assets/159d9817-6f15-4001-8fba-e991559aba77" />
+
 ### 2. Extract the Files
 After downloading:
 1. Right-click the ZIP file  
