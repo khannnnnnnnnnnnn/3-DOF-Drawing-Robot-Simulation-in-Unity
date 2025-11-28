@@ -214,8 +214,25 @@ This section provides an overview of the 3-DOF Drawing Robot System, including i
 ---
 
 ## Installation
-### Prerequisites
-- Unity 3D
+
+You can run the 3-DOF Drawing Robot Simulation without opening the Unity project by downloading the exported game build from Google Drive.
+
+### 1. Download the Simulation
+Click the link below to download the Unity build:
+
+🔗 **[Download Simulation (Google Drive)](https://drive.google.com/drive/folders/19nDmi6M2uW3-X1BZ3VPevm-cb-oeUpgr?usp=sharing)**
+
+### 2. Extract the Files
+After downloading:
+1. Right-click the ZIP file  
+2. Select **Extract All**  
+3. Extract the folder named **Kinematics**
+
+### 3. Run the Simulation
+Open the extracted **Kinematics** folder and run the executable:
+
+- **Windows:**  
+  `Scara.exe`
 
 ### Setup Instructions
 
