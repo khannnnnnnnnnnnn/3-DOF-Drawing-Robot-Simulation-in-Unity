@@ -15,7 +15,7 @@ This project is part of the FRA333 Robot Kinematics course at the Institute of F
 ---
 
 ## Table of Contents
-1. [Introduction](#introduction)
+1. [Introduction](#1.-introduction)
    - [Project Objectives](#project-objectives)
    - [Scope of Work](#scope-of-work)
 2. [Theory and Related Work](#theory-and-related-work)
