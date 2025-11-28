@@ -200,7 +200,6 @@ This section provides an overview of the 3-DOF Drawing Robot System, including i
 **Input Section:**
 - **Link Parameters (L1, L2, L3):** Define the lengths of the robot’s links. These are constants that determine the manipulator's physical size.
 - **Target Alphabet (Character):** The user inputs an uppercase letter, which is processed by the trajectory planner to generate the drawing path.
-- **Drawing Parameters:** Include size, starting position, and drawing speed, allowing control over the letter's scale and robot speed.
 
 **Toolbox:**
 - **Forward Kinematics (DH Parameters):** Calculates the end-effector position based on joint angles using Denavit-Hartenberg parameters.
