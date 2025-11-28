@@ -261,7 +261,31 @@ https://github.com/user-attachments/assets/a6331f78-85c7-4e6b-90cb-6fc346642f6c
 
 ## Testing and Results
 
-## Future Work  
+## Future Work
+
+- **Allow Custom Letter Size**:  
+  Implement a feature that allows users to select the size of the letter to be drawn. This could involve adding a slider or input field to dynamically adjust the scaling of the drawn character.
+
+- **Support for Lowercase Letters**:  
+  Extend the functionality to allow the robot to draw lowercase letters. This would require adding the corresponding path and motion for each lowercase character, ensuring the robot handles them with the same precision as uppercase characters.
+
+- **Speed Control for Drawing**:  
+  Introduce an option to control the speed of the drawing process. Users could adjust the speed based on their preferences, allowing for both faster and slower motion for demonstration or testing purposes.
+
+- **Improve Trajectory Planning**:  
+  Enhance the trajectory planning algorithm to create smoother curves for more complex characters or patterns. This could be especially useful for drawing more intricate designs or letters with rounded edges.
+
+- **Add Support for Drawing Shapes or Custom Text**:  
+  Allow users to input custom shapes or text (beyond just alphabet letters) to be drawn by the robot. This could be achieved by enabling a free-text input or uploading an image that the robot can convert to a drawing path.
+
+- **Real-Time Feedback on Drawing Process**:  
+  Implement a feature that shows the robot's current progress during the drawing, such as a percentage or a visual progress bar, so users can track how much of the drawing has been completed.
+
+- **Enhance User Interface**:  
+  Improve the user interface by adding more intuitive controls, such as buttons to clear the drawing or reset the system to its starting state. Additional options could include changing colors or selecting different pen tools.
+
+- **Save and Load Drawings**:  
+  Allow users to save the drawn output to a file or load pre-existing drawings for the robot to replicate. This would enable users to save custom drawings and reload them in future sessions.
 
 ## References
 
