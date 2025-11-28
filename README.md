@@ -15,7 +15,7 @@ This project is part of the FRA333 Robot Kinematics course at the Institute of F
 ---
 
 ## Table of Contents
-1. [Introduction](#1.-introduction)
+1. [Introduction](#introduction)
    - [Project Objectives](#project-objectives)
    - [Scope of Work](#scope-of-work)
 2. [Theory and Related Work](#theory-and-related-work)
@@ -43,7 +43,7 @@ This project is part of the FRA333 Robot Kinematics course at the Institute of F
 
 ---
 
-## 1. Introduction
+## Introduction
 
 ### Project Objectives
 The goal of this project is to simulate the motion of a 3-DOF planar manipulator for drawing letters. This involves:
@@ -59,7 +59,7 @@ The goal of this project is to simulate the motion of a 3-DOF planar manipulator
 
 ---
 
-## 2. Theory and Related Work
+## Theory and Related Work
 
 ### Overview of 3-DOF Manipulators
 A 3-DOF planar manipulator typically uses rotational joints to perform tasks in a two-dimensional plane. In this configuration, the manipulator's movement is determined by three rotational degrees of freedom (DOF), which control the position and orientation of the end effector. This section explores the geometric and mathematical background necessary to understand the robot's kinematics.
@@ -184,7 +184,7 @@ Additionally, alignment issues between the kinematic model and the Unity coordin
 ---
 
 
-## 3. System Overview
+## System Overview
 This section provides an overview of the 3-DOF Drawing Robot System, including its key components and how they interact to achieve the goal of drawing predefined shapes. Below is a diagram that illustrates the structure and workflow of the system.
 
 ### System Diagram
@@ -209,21 +209,21 @@ This section provides an overview of the 3-DOF Drawing Robot System, including i
 
 ---
 
-## 4. Installation
+## Installation
 ### Prerequisites
 - Unity 3D
 
 ### Setup Instructions
 
-## 5. How to Use
+## How to Use
 
-## 6. Algorithms and Methods
+## Algorithms and Methods
 
-## 7. Testing and Results
+## Testing and Results
 
-## 8. Future Work  
+## Future Work  
 
-## 9. References
+## References
 
 - SPONG, M. W., HUTCHINSON, S., & VIDYASAGAR, M. ROBOT MODELING AND CONTROL. WILEY, 2020.
 - MURRAY, R. M., LI, Z., & SASTRY, S. S. A MATHEMATICAL INTRODUCTION TO ROBOTIC MANIPULATION. CRC PRESS, 1994.
