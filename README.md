@@ -2,7 +2,11 @@
 
 This project simulates a 3-DOF planar manipulator that draws letters in 3D space using Unity. The system uses forward and inverse kinematics to control the robot's motion, along with a trajectory planner to convert uppercase alphabet characters into movement paths. The simulation is visualized in real-time in Unity, providing an interactive way to understand the manipulator's behavior.
 
-<Insert your YouTube video link here>
+
+
+https://github.com/user-attachments/assets/536df1b7-ed42-4e5e-a718-1f2538f02e3b
+
+
 
 This project is part of the FRA333 Robot Kinematics course at the Institute of Field Robotics, King Mongkut’s University of Technology Thonburi.
 
