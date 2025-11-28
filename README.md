@@ -234,9 +234,12 @@ Open the extracted **Kinematics** folder and run the executable:
 - **Windows:**  
   `Scara.exe`
 
-### Setup Instructions
-
 ## How to Use
+
+- Enter the desired uppercase alphabet in the input field.
+- Click Start to begin the drawing motion.
+- Watch the 3-DOF robot draw the selected character in real-time.
+- Toggle the view if you want to observe the robot from different angles.
 
 ## Algorithms and Methods
 
