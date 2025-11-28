@@ -62,25 +62,127 @@ The goal of this project is to simulate the motion of a 3-DOF planar manipulator
 ## Theory and Related Work
 
 ### Overview of 3-DOF Manipulators
-A 3-DOF planar manipulator typically uses rotational joints to perform tasks in a two-dimensional plane. This section explores the geometrical and mathematical background necessary to understand the robot's kinematics.
+A 3-DOF planar manipulator typically uses rotational joints to perform tasks in a two-dimensional plane. In this configuration, the manipulator's movement is determined by three rotational degrees of freedom (DOF), which control the position and orientation of the end effector. This section explores the geometric and mathematical background necessary to understand the robot's kinematics.
+
+A common 3-DOF manipulator is the **R-R-P (Revolute-Revolute-Prismatic) chain**, where two joints are rotational (revolute) and one is translational (prismatic). The configuration is used for tasks such as drawing, where precision and control over the position and orientation of the end effector are required.
 
 ### Kinematics Modeling: DH Parameters
-The Denavit-Hartenberg (DH) parameters are used to derive the transformation matrices for the robot's links and joints. This model allows the manipulator's position and orientation to be calculated from the joint angles and link lengths.
+The Denavit-Hartenberg (DH) parameterization is widely used for modeling the kinematics of robotic manipulators. It allows for a systematic way to derive transformation matrices that describe the relationship between the coordinate frames of each link in the manipulator.
+
+Each link of a manipulator is associated with four DH parameters:
+- $$\( \theta_i \)$$: Joint angle (for revolute joints).
+- $$\( d_i \)$$: Link offset (for prismatic joints).
+- $$\( a_i \)$$: Link length.
+- $$\( \alpha_i \)$$: Link twist.
+
+The transformation matrix from the \(i-1\)-th to the \(i\)-th link is given by:
+
+$$
+T_i^{i-1} = 
+\begin{bmatrix}
+\cos(\theta_i) & -\sin(\theta_i)\cos(\alpha_i) & \sin(\theta_i)\sin(\alpha_i) & a_i\cos(\theta_i) \\
+\sin(\theta_i) & \cos(\theta_i)\cos(\alpha_i) & -\cos(\theta_i)\sin(\alpha_i) & a_i\sin(\theta_i) \\
+0 & \sin(\alpha_i) & \cos(\alpha_i) & d_i \\
+0 & 0 & 0 & 1
+\end{bmatrix}
+$$
+
+Where:
+- $$\( T_i^{i-1} \)$$ is the transformation matrix from frame $$\( i-1 \)$$ to frame $$\( i \)$$.
+- The parameters $$\( \theta_i \), \( d_i \), \( a_i \), and \( \alpha_i \)$$ are specific to each link and joint type.
+
+Using the DH parameters, we can calculate the overall transformation matrix from the base to the end effector by multiplying the transformation matrices for each link:
+
+$$
+T = T_1^0 \cdot T_2^1 \cdot T_3^2 \cdot \dots \cdot T_n^{n-1}
+$$
+
+This transformation matrix describes the position and orientation of the end effector relative to the base frame.
 
 ### Forward and Inverse Kinematics
-- **Forward Kinematics**: Given the joint parameters, this method calculates the end-effector's position in space.
-- **Inverse Kinematics**: Given the desired position of the end-effector, inverse kinematics solves for the necessary joint angles.
+- **Forward Kinematics**: Given the joint parameters $$\( \theta_1, \theta_2, \dots, \theta_n \)$$ (or \$$( d_i \)$$ for prismatic joints), forward kinematics calculates the position of the end effector in space. The end-effector position is obtained by applying the cumulative transformation from the base to the end effector using the DH parameter model.
+
+$$
+\text{End Effector Position} = \begin{bmatrix} x \\ y \\ z \end{bmatrix} = T_1^0 \cdot T_2^1 \cdot T_3^2 \cdot \dots \cdot T_n^{n-1} \cdot \begin{bmatrix} x_0 \\ y_0 \\ z_0 \end{bmatrix}
+$$
+
+Where 
+
+$$
+\begin{bmatrix}
+x_0 \\
+y_0 \\
+z_0
+\end{bmatrix}
+$$
+
+
+ is the position of the end effector in its local frame.
+
+- **Inverse Kinematics**: Given the desired position of the end effector $$\( (x, y, z) \)$$, inverse kinematics calculates the joint parameters $$\( \theta_1, \theta_2, \dots, \theta_n \)$$ (or $$\( d_i \)$$ for prismatic joints) that achieve this position. For a 3-DOF manipulator, inverse kinematics can have multiple solutions, especially for revolute joints (elbow-up vs. elbow-down configurations). 
+
+For a planar manipulator with two revolute joints (R-R) and one prismatic joint (P), the inverse kinematics equations can be derived using geometric methods or numerical solvers. A common method for solving inverse kinematics for the R-R chain involves using the law of cosines and the sine rule.
+
+$$
+\theta_2 = \cos^{-1}\left( \frac{x^2 + y^2 - L_1^2 - L_2^2}{2L_1L_2} \right)
+$$
+
+$$
+\theta_1 = \tan^{-1}\left( \frac{y}{x} \right) - \tan^{-1}\left( \frac{L_2 \sin(\theta_2)}{L_1 + L_2 \cos(\theta_2)} \right)
+$$
+
+Where $$\( L_1 \)$$ and $$\( L_2 \)$$ are the lengths of the links, and $$\( (x, y) \)$$ is the position of the end effector.
 
 ### Differential Kinematics & Jacobian Matrix
-The Jacobian matrix links joint velocities to end-effector velocities, providing a way to calculate the required joint speeds to follow a desired trajectory.
+The Jacobian matrix $$\( J \)$$ relates the joint velocities $$\( \dot{\theta_1}, \dot{\theta_2}, \dots, \dot{\theta_n} \)$$ (for revolute joints) and $$\( \dot{d_3} \)$$ (for prismatic joints) to the end-effector velocities $$\( \dot{x}, \dot{y}, \dot{z} \)$$ in Cartesian space:
+
+
+$$
+\begin{bmatrix}
+\dot{x} \\
+\dot{y} \\
+\dot{z}
+\end{bmatrix}
+\text{ = }
+J \cdot
+\begin{bmatrix}
+\dot{\theta_1} \\
+\dot{\theta_2} \\
+\dot{d_3}
+\end{bmatrix}
+$$
+
+
+Where the Jacobian matrix is derived by differentiating the forward kinematics equations with respect to time. The Jacobian matrix is crucial for controlling the velocity of the end effector in task space and is used to compute the required joint velocities for a desired end-effector velocity.
+
+For a 3-DOF manipulator, the Jacobian can be computed based on the specific geometry of the robot:
+
+$$
+J = \begin{bmatrix}
+\frac{\partial x}{\partial \theta_1} & \frac{\partial x}{\partial \theta_2} & \frac{\partial x}{\partial d_3} \\
+\frac{\partial y}{\partial \theta_1} & \frac{\partial y}{\partial \theta_2} & \frac{\partial y}{\partial d_3} \\
+\frac{\partial z}{\partial \theta_1} & \frac{\partial z}{\partial \theta_2} & \frac{\partial z}{\partial d_3}
+\end{bmatrix}
+$$
 
 ### Trajectory Planning and Time Scaling
-This section explains how to plan smooth motion paths and scale the trajectory to ensure constant velocity and avoid jerk during motion.
+Trajectory planning involves generating smooth paths for the robot’s end effector. The path is typically represented by a sequence of points in Cartesian space, and time scaling ensures that the robot moves along this path at a constant velocity or with a predefined speed profile.
+
+A common trajectory profile is the **cubic spline**, which is used to interpolate between waypoints. The cubic spline ensures that the velocity and acceleration are continuous along the path:
+
+$$
+q(t) = a_0 + a_1t + a_2t^2 + a_3t^3
+$$
+
+Where $$\(q(t)\)$$ is the position of the end effector at time $$\(t\)$$, and the coefficients $$\(a_0, a_1, a_2, a_3\)$$ are determined based on boundary conditions (such as initial and final positions, velocities, and accelerations).
 
 ### Continuous Motion Selector and Model Alignment
-Incorporates a mechanism to ensure smooth motion transitions, particularly when multiple inverse kinematic solutions are possible. Additionally, it addresses alignment issues between the kinematic model and Unity’s coordinate system.
+When solving inverse kinematics for manipulator configurations with multiple possible solutions (e.g., elbow-up and elbow-down), it is crucial to select the solution that ensures smooth and continuous motion. The **Continuous Motion Selector** algorithm ensures that the robot transitions between kinematic solutions smoothly, minimizing abrupt changes in joint angles that would otherwise cause jerky motion.
+
+Additionally, alignment issues between the kinematic model and the Unity coordinate system can arise. These issues are handled by applying an **Angular Offset** to correct for any misalignments, ensuring that the robot’s motion in Unity matches the desired kinematic model.
 
 ---
+
 
 ## System Overview
 
