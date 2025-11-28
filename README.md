@@ -1,4 +1,4 @@
-<img width="1615" height="907" alt="image" src="https://github.com/user-attachments/assets/674093bd-134e-412c-8e15-33cc6765e8a6" /># 3-DOF-Drawing-Robot-Simulation-in-Unity
+# 3-DOF-Drawing-Robot-Simulation-in-Unity
 
 This project simulates a 3-DOF planar manipulator that draws letters in 3D space using Unity. The system uses forward and inverse kinematics to control the robot's motion, along with a trajectory planner to convert uppercase alphabet characters into movement paths. The simulation is visualized in real-time in Unity, providing an interactive way to understand the manipulator's behavior.
 
@@ -241,13 +241,21 @@ Open the extracted **Kinematics** folder and run the executable:
 ## How to Use
 
 - Enter the desired uppercase alphabet in the input field.
+  
 <img width="1615" height="907" alt="image" src="https://github.com/user-attachments/assets/77cafb69-0376-4337-9794-38b69e47cde6" />
+
 - Click Start to begin the drawing motion.
+  
 <img width="1612" height="906" alt="image" src="https://github.com/user-attachments/assets/b26235a1-613e-4111-aaf8-08667a8102f7" />
+
 - Watch the 3-DOF robot draw the selected character in real-time.
+  
 https://github.com/user-attachments/assets/8d55a4c1-0fec-4e27-85f7-b75ef5e82995
+
 - Toggle the view if you want to observe the robot from different angles.
+  
 https://github.com/user-attachments/assets/a6331f78-85c7-4e6b-90cb-6fc346642f6c
+
 
 ## Algorithms and Methods
 
