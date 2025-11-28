@@ -22,7 +22,7 @@ This project is part of the FRA333 Robot Kinematics course at the Institute of F
    - [Overview of 3-DOF Manipulators](#overview-of-3-dof-manipulators)
    - [Kinematics Modeling: DH Parameters](#kinematics-modeling-dh-parameters)
    - [Forward and Inverse Kinematics](#forward-and-inverse-kinematics)
-   - [Differential Kinematics & Jacobian Matrix](#differential-kinematics-&-jacobian-matrix)
+   - [Differential Kinematics & Jacobian Matrix](#differential-kinematics-jacobian-matrix)
    - [Trajectory Planning and Time Scaling](#trajectory-planning-and-time-scaling)
    - [Continuous Motion Selector and Model Alignment](#continuous-motion-selector-and-model-alignment)
 3. [System Overview](#system-overview)
