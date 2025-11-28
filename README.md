@@ -6,6 +6,14 @@ This project simulates a 3-DOF planar manipulator that draws letters in 3D space
 
 This project is part of the FRA333 Robot Kinematics course at the Institute of Field Robotics, King Mongkut’s University of Technology Thonburi.
 
+---
+
+## Collabolator
+- Supassakorn Wora-Urai (66340500056) 
+- Sasish Kaewsing (66340500076)
+
+---
+
 ## Table of Contents
 1. [Introduction](#introduction)
    - [Project Objectives](#project-objectives)
@@ -118,7 +126,3 @@ Incorporates a mechanism to ensure smooth motion transitions, particularly when 
 - MURRAY, R. M., LI, Z., & SASTRY, S. S. A MATHEMATICAL INTRODUCTION TO ROBOTIC MANIPULATION. CRC PRESS, 1994.
 - CRAIG, J. J. INTRODUCTION TO ROBOTICS: MECHANICS AND CONTROL, 4TH EDITION. PEARSON EDUCATION, 2017.
 - PAUL, R. P. ROBOT MANIPULATORS: MATHEMATICS, PROGRAMMING, AND CONTROL. MIT PRESS, 1981.
-
-## Collabolator
-- Sasish Kaewsing (Khan)
-- Supassakorn Wora-Urai (Kevin) 
