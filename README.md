@@ -328,6 +328,14 @@ Pen Down: Move $d_3$ to $\text{penDownHeight}$. ($\text{TrailRenderer}$ enabled)
 | **Motion Continuity** | Word "HI" | **H**: 3 lifts. **I**: 3 lifts. | Pen lifts between H-I strokes. Confirms the continuity selector is functional for separating letters. |  | 
 | **Continuous Stroke** | Letter 'M' (Connected lines) | No pen lift between connected segments. | Pen remains down for the entire duration of the 'M' stroke (5 movements), demonstrating efficient motion control. |
 
+### Performance Evaluation
+
+The simulation uses Geometric Inverse Kinematics, which is computationally efficient. The system maintains a consistent frame rate, with minimal processing delay for the IK solution, resulting in a smooth and real-time visualization of the robot's motion. The primary resource usage is dominated by the rendering of the 3D models and the Trail Renderer (ink trail).
+
+Analysis of Curved Trajectories: The successful drawing of letters like 'S' and 'G' without polygon artifacts demonstrates that the Manual Path Generator combined with $\text{CreateArc}$ is superior to texture-based pathfinding (e.g., Unity Colliders), which often simplify curves into low-vertex polygons.
+
+---
+
 ## Future Work
 
 - **Allow Custom Letter Size**:  
