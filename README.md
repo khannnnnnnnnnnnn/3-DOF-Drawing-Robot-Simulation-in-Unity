@@ -33,8 +33,6 @@ This project is part of the FRA333 Robot Kinematics course at the Institute of F
    - [System Diagram](#system-diagram)
    - [Key Components](#key-components)
 4. [Installation](#installation)
-   - [Prerequisites](#prerequisites)
-   - [Setup Instructions](#setup-instructions)
 5. [How to Use](#how-to-use)
 6. [Algorithms and Methods](#algorithms-and-methods)
 7. [Testing and Results](#testing-and-results)
