@@ -13,7 +13,7 @@ This project is part of the FRA333 Robot Kinematics course at the Institute of F
 ---
 
 ## Collabolator
-- Supassakorn Wora-Urai (66340500056) 
+- Supasakorn Wora-Urai (66340500056) 
 - Sasish Kaewsing (66340500076)
 
 ---
