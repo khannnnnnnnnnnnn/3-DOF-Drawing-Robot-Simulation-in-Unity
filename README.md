@@ -256,10 +256,77 @@ https://github.com/user-attachments/assets/8d55a4c1-0fec-4e27-85f7-b75ef5e82995
   
 https://github.com/user-attachments/assets/a6331f78-85c7-4e6b-90cb-6fc346642f6c
 
+---
 
 ## Algorithms and Methods
 
+This section details the primary algorithms used to enable the 3-DOF R-R-P manipulator simulation in Unity, focusing on the inverse kinematics (IK) solution and the custom path generation pipeline.
+
+### Inverse Kinematics (IK) Solver
+
+The simulation uses a geometric approach to solve the Inverse Kinematics problem for the R-R chain, determining the required joint angles ($\theta_1$, $\theta_2$) for any given Cartesian target point $(x, y)$. The third DOF (the Prismatic joint, $d_3$) directly controls the $z$-coordinate (height) and is solved linearly.
+
+The core steps are:
+
+- Coordinate Mapping: The target point, $P_{target} = (x_t, y_t, z_t)$, is first transformed into the local coordinate frame of the robot's base. The height, $z_t$, is directly mapped to the prismatic joint extension $d_3$. The planar coordinates, $(x, y)$, are used for angular calculation.
+
+- Elbow Angle ($\theta_2$): The angle of the second joint is calculated using the Law of Cosines, based on the triangle formed by the two links ($L_1$, $L_2$) and the distance to the target ($D = \sqrt{x^2 + y^2}$):
+
+$$
+\cos(\theta_2) = \frac{x^2 + y^2 - L_1^2 - L_2^2}{2 L_1 L_2}
+$$
+
+$$
+\theta_2 = \arccos\left(\frac{D^2 - L_1^2 - L_2^2}{2 L_1 L_2}\right)
+$$
+
+- Shoulder Angle ($\theta_1$): The angle of the first joint is calculated by finding the angle to the target and subtracting the internal angle formed by the elbow joint:
+
+$$
+\theta_1 = \text{atan2}(y, x) - \text{atan2}(L_2 \sin(\theta_2), L_1 + L_2 \cos(\theta_2))
+$$
+
+- Continuous Motion Selector: The $\theta_1$ and $\theta_2$ solutions are continuously applied in the Unity $\text{Update()}$ loop. The use of $\text{atan2}$ inherently provides robust quadrant handling, and the geometric method avoids singularities common in matrix-based solvers within the workspace.
+
+### Manual Path Generator (Trajectory Planning)
+
+The Trajectory Planner converts user-inputted text into a continuous sequence of 3D waypoints. To guarantee precise and reproducible motion for both straight and curved segments, a Manual Stroke Definition algorithm is employed:
+
+- Stroke Definition: Each uppercase letter ($A$ through $Z$) is decomposed into a list of constituent strokes. These strokes are hard-coded as sequences of coordinate points $(x, z)$ on a normalized $4 \times 5$ grid.
+
+- Curved Segment Generation (Arc Interpolation): For letters requiring smooth curves (e.g., $C, S, G, O$), the definition uses the custom function $\text{CreateArc}(c_x, c_z, r_x, r_z, \text{startAngle}, \text{endAngle})$. This function mathematically generates a dense set of intermediate points ($\approx 20$ points) between the start and end angles using $\cos$ and $\sin$, ensuring the robot follows a smooth, continuous curve rather than jagged line segments.
+
+- Scaling and Offset: The generated normalized points are then scaled by the user-defined scale factor and translated by the current letter's $x$-offset before being converted to world coordinates via $\text{TransformPoint}$.
+
+### Optimized Motion Control (Pen Up/Down)
+
+A state machine embedded within the WriteRoutine coroutine manages the prismatic joint ($d_3$) to ensure efficient drawing:
+
+- Continuity Check: Before starting a new stroke, the algorithm checks if the new starting point ($P_{start}$) is equal to the end point of the previous stroke ($P_{end}$). This is done using a positional tolerance ($\approx 0.01\text{m}$).
+
+- Discontinuous Motion (Lift Required): If $P_{start} \neq P_{end}$, the robot performs a lift-and-move sequence:
+
+Pen Up: Move $d_3$ to $\text{penUpHeight}$. ($\text{TrailRenderer}$ disabled).
+
+Hover: Move end-effector (GhostTarget) to $P_{start}$.
+
+Pen Down: Move $d_3$ to $\text{penDownHeight}$. ($\text{TrailRenderer}$ enabled).
+
+- Continuous Motion (Draw Directly): If $P_{start} = P_{end}$, the motion controller skips the Pen Up/Hover/Pen Down sequence, allowing the robot to transition immediately into drawing the next segment, eliminating unnecessary vertical movements and saving execution time.
+
+---
+
 ## Testing and Results
+
+### Simulation Results and Visual Output
+
+| Test Case | Input | Expected Output | Actual Visual Result | Observations | 
+ | ----- | ----- | ----- | ----- | ----- | 
+| **Reach Boundary** | Target at $L_1 + L_2 + 10$ | Clamp at Max Reach (365 units) | End effector stops at the red outer workspace ring. | IK successfully applies limits to prevent singularities and out-of-bounds errors. | 
+| **Straight Line Accuracy** | Letter 'H' (Spine) | Perfect vertical/horizontal lines. | Straight segments show minimal deviation from ideal path. | Confirms accuracy of coordinate system alignment and IK solution for linear motions. | 
+| **Curved Trajectory** | Letter 'S' (Compound Arc) | Smooth, continuous double-arc path. | The path is a fluid curve, confirming the success of the $\text{CreateArc}$ function in generating high-resolution, smooth waypoints. | The use of trigonometric interpolation provides superior path quality compared to simple linear segment approximation. | 
+| **Motion Continuity** | Word "HI" | **H**: 3 lifts. **I**: 3 lifts. | Pen lifts between H-I strokes. Confirms the continuity selector is functional for separating letters. |  | 
+| **Continuous Stroke** | Letter 'M' (Connected lines) | No pen lift between connected segments. | Pen remains down for the entire duration of the 'M' stroke (5 movements), demonstrating efficient motion control. |
 
 ## Future Work
 
