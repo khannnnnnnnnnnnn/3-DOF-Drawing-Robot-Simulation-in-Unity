@@ -306,9 +306,9 @@ A state machine embedded within the WriteRoutine coroutine manages the prismatic
 
 - Discontinuous Motion (Lift Required): If $P_{start} \neq P_{end}$, the robot performs a lift-and-move sequence:
 
-- Pen Up: Move $d_3$ to $\text{penUpHeight}$. ($\text{TrailRenderer}$ disabled).
+   - Pen Up: Move $d_3$ to $\text{penUpHeight}$. ($\text{TrailRenderer}$ disabled).
 
-- Hover: Move end-effector (GhostTarget) to $P_{start}$.
+   - Hover: Move end-effector (GhostTarget) to $P_{start}$.
 
 - Pen Down: Move $d_3$ to $\text{penDownHeight}$. ($\text{TrailRenderer}$ enabled).
 
