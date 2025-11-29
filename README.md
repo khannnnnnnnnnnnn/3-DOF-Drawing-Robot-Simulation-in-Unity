@@ -310,7 +310,7 @@ A state machine embedded within the WriteRoutine coroutine manages the prismatic
 
    - Hover: Move end-effector (GhostTarget) to $P_{start}$.
 
-- Pen Down: Move $d_3$ to $\text{penDownHeight}$. ($\text{TrailRenderer}$ enabled).
+   - Pen Down: Move $d_3$ to $\text{penDownHeight}$. ($\text{TrailRenderer}$ enabled).
 
 - Continuous Motion (Draw Directly): If $P_{start} = P_{end}$, the motion controller skips the Pen Up/Hover/Pen Down sequence, allowing the robot to transition immediately into drawing the next segment, eliminating unnecessary vertical movements and saving execution time.
 
