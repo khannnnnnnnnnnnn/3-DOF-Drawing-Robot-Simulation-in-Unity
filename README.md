@@ -242,17 +242,20 @@ https://github.com/user-attachments/assets/a6331f78-85c7-4e6b-90cb-6fc346642f6c
 
 ---
 
-## Algorithms and Methods
+# Algorithms and Methods
 
 This section details the primary algorithms used to enable the 3-DOF R-R-P manipulator simulation in Unity, focusing on the inverse kinematics solution and the custom path generation pipeline.
 
 ## Inverse Kinematics Solver
 
-The IK solver in `ScaraController.cs` implements a geometric approach optimized for the R-R-P configuration:
+The IK solver in `ScaraController.cs` implements a geometric approach optimized for the R-R-P configuration. This solver runs every frame in the `Update()` loop when the robot is in AutomaticIK mode, continuously calculating the joint angles needed to reach the target position.
 
 ### Algorithm Steps:
 
-**1. Coordinate Frame Transformation**
+**Step 1: Coordinate Frame Transformation**
+
+The first challenge is that Unity's coordinate system doesn't align with the robot's local coordinate system. The robot base is rotated -90° around the X-axis, so we need to transform the target position from Unity's world space into the robot's local space.
+
 ```csharp
 // Calculate shoulder pivot position in world space
 Vector3 shoulderWorldPos = transform.position;
@@ -266,7 +269,22 @@ float depth = Vector3.Dot(diffWorld, transform.up);     // Local Y
 float height = Vector3.Dot(diffWorld, transform.forward); // Local Z
 ```
 
-**2. Planar Distance Calculation**
+**Explanation:**
+- First, we calculate the shoulder pivot's world position. This is crucial because the robot's rotation happens around the shoulder, not the base.
+- We use only the X and Z coordinates from the shoulder bone's position, keeping the base's Y coordinate. This ensures we're calculating from the correct pivot point in the horizontal plane.
+- `diffWorld` is the vector from the shoulder pivot to the target position.
+- We then use the dot product to project this vector onto the robot's three local axes:
+  - `transform.right` gives us the local X component (left-right movement)
+  - `transform.up` gives us the local Y component (forward-backward, called "depth")
+  - `transform.forward` gives us the local Z component (height)
+- This transformation is essential because the inverse kinematics equations work in the robot's local coordinate frame, not Unity's global frame.
+
+---
+
+**Step 2: Planar Distance Calculation**
+
+Now that we have the target in local coordinates, we calculate the 2D distance in the horizontal plane (ignoring height). This distance will be used to solve for the arm's joint angles.
+
 ```csharp
 float dist = Mathf.Sqrt(x*x + depth*depth);
 float combinedLength = L1 + L2;
@@ -276,13 +294,44 @@ if (dist > combinedLength) dist = combinedLength - 0.001f;
 if (dist < Mathf.Abs(L1 - L2)) dist = Mathf.Abs(L1 - L2) + 0.001f;
 ```
 
-**3. Elbow Angle Solution (Law of Cosines)**
+**Explanation:**
+- `dist` is the straight-line distance from the shoulder to the target in the horizontal plane, calculated using the Pythagorean theorem.
+- `combinedLength` is the robot's maximum reach (when the arm is fully extended).
+- **Workspace Clamping:** The robot cannot reach targets outside its physical workspace. We clamp the distance to prevent two problems:
+  - If the target is beyond maximum reach (dist > L1 + L2), we clamp it to just inside the boundary
+  - If the target is inside the minimum reach (dist < |L1 - L2|), we clamp it to just outside this inner dead zone
+- The small epsilon value (0.001) prevents division by zero and numerical instability at the exact workspace boundaries.
+- This clamping ensures the IK solver always gets valid inputs and never produces undefined (NaN) angles.
+
+---
+
+**Step 3: Elbow Angle Solution (Law of Cosines)**
+
+With the distance known, we can now solve for the elbow angle using the law of cosines. This is the angle between the two arm segments.
+
 ```csharp
 float cosT2 = (dist*dist - L1*L1 - L2*L2) / (2 * L1 * L2);
 float theta2 = Mathf.Acos(Mathf.Clamp(cosT2, -1f, 1f));
 ```
 
-**4. Shoulder Angle Solution (Geometric Decomposition)**
+**Explanation:**
+- This uses the law of cosines for triangles: c² = a² + b² - 2ab·cos(C)
+- Rearranged to solve for the angle: cos(θ₂) = (dist² - L1² - L2²) / (2·L1·L2)
+- The triangle is formed by:
+  - Side a = L1 (shoulder to elbow)
+  - Side b = L2 (elbow to end-effector)
+  - Side c = dist (shoulder to target)
+  - Angle C = θ₂ (elbow angle)
+- `Mathf.Clamp(cosT2, -1f, 1f)` ensures the value stays within the valid range for arccosine [-1, 1]. Without this, floating-point errors could cause the acos function to return NaN.
+- `theta2` is always positive in this implementation, representing the elbow bend angle.
+- This geometric solution is much faster than iterative numerical methods and gives exact results in a single calculation.
+
+---
+
+**Step 4: Shoulder Angle Solution (Geometric Decomposition)**
+
+The shoulder angle is more complex because it depends on both the direction to the target and the elbow configuration. We decompose this into two components.
+
 ```csharp
 float baseAngle = Mathf.Atan2(depth, x);
 float innerAngle = Mathf.Atan2(
@@ -292,7 +341,23 @@ float innerAngle = Mathf.Atan2(
 float theta1 = baseAngle - innerAngle;
 ```
 
-**5. Apply Joint Rotations**
+**Explanation:**
+- **baseAngle (β):** This is the direction from the shoulder to the target in the horizontal plane, calculated using `atan2(depth, x)`. This gives us the angle in the correct quadrant.
+- **innerAngle (φ):** This is the angle inside the triangle at the shoulder joint. It represents how much the elbow configuration affects the shoulder rotation.
+  - The numerator `L2 * sin(θ₂)` is the perpendicular component of the second link
+  - The denominator `L1 + L2 * cos(θ₂)` is the parallel component (first link plus projection of second link)
+  - Together, these form a right triangle that lets us calculate the internal angle
+- **theta1 (θ₁):** The final shoulder angle is the difference between the target direction and the internal angle.
+  - If we only used baseAngle, the shoulder would point directly at the target, but the elbow bend would throw off the end-effector position
+  - Subtracting innerAngle compensates for the elbow configuration
+- This method automatically handles the "elbow-up" configuration. In a full implementation, you could add logic to choose between "elbow-up" and "elbow-down" solutions.
+
+---
+
+**Step 5: Apply Joint Rotations**
+
+Now we convert the calculated angles from radians to degrees and apply them to the Unity Transform components.
+
 ```csharp
 float t1Deg = theta1 * Mathf.Rad2Deg;
 float t2Deg = theta2 * Mathf.Rad2Deg;
@@ -308,11 +373,49 @@ elbowJoint.localRotation =
     _elbowStartRot * Quaternion.AngleAxis(t2Deg + elbowOffset, Vector3.up);
 ```
 
-**6. Prismatic Joint Control**
+**Explanation:**
+- **Radian to Degree Conversion:** Unity's Quaternion.AngleAxis expects degrees, so we multiply by `Mathf.Rad2Deg` (approximately 57.2958).
+- **Inversion Flags:** Different robot models may have joints rotating in opposite directions. These boolean flags let us flip the rotation direction without changing the core IK math.
+  - `invertShoulderRotation` and `invertElbowRotation` are public inspector variables
+  - This makes the code reusable for different SCARA robot configurations
+- **Quaternion Rotation:**
+  - `_shoulderStartRot` and `_elbowStartRot` store the initial rotations from the Start() method
+  - We multiply this initial rotation by a new rotation around the vertical axis (Vector3.up)
+  - This preserves any initial offset in the 3D model while applying our calculated joint angles
+- **Offset Calibration:** `shoulderOffset` and `elbowOffset` are adjustable parameters that let us fine-tune the robot alignment if the 3D model doesn't perfectly match our kinematic model.
+- We use `localRotation` instead of `rotation` because we want to rotate relative to the parent bone, not in world space.
+
+---
+
+**Step 6: Prismatic Joint Control**
+
+The vertical (Z-axis) motion is controlled by the prismatic joint, which is independent of the planar arm motion.
+
 ```csharp
 float h = Mathf.Clamp(height, minHeight, maxHeight);
 ApplyLift(h);
 ```
+
+**Explanation:**
+- `height` was calculated in Step 1 from the Z-component of the target position.
+- `Mathf.Clamp` restricts the height to the valid range (0 to 50 units in this implementation).
+- `ApplyLift(h)` is a helper function that sets the vertical position of the shoulder lift bone:
+  ```csharp
+  void ApplyLift(float val)
+  {
+      if (invertLift) val = -val;
+      Vector3 finalPos = _liftStartPos;
+      switch (liftAxis) { 
+          case Axis.X: finalPos.x += val; break; 
+          case Axis.Y: finalPos.y += val; break; 
+          case Axis.Z: finalPos.z += val; break; 
+      }
+      shoulderLiftBone.localPosition = finalPos;
+  }
+  ```
+- The `liftAxis` enum allows the prismatic joint to work along different axes depending on how the 3D model is constructed.
+- `invertLift` handles cases where positive motion should move down instead of up.
+- This separation of vertical and horizontal motion is a key advantage of the SCARA configuration—the height can be controlled independently without affecting the XY positioning.
 
 **Advantages of this Approach:**
 - **Computational Efficiency**: Closed-form solution (no iterative solving)
@@ -322,9 +425,11 @@ ApplyLift(h);
 
 ## Path Generation System
 
-The `ManualPathGenerator.cs` implements a stroke-based letter representation system:
+The `ManualPathGenerator.cs` implements a stroke-based letter representation system. This system converts text characters into sequences of 3D coordinates that the robot can follow to draw letters.
 
 ### Letter Definition Structure:
+
+Each letter in the alphabet is defined as a switch case that adds one or more strokes to a list. Each stroke is a collection of connected points.
 
 **Example: Letter 'A'**
 ```csharp
@@ -335,9 +440,23 @@ case 'A':
     break;
 ```
 
+**Explanation:**
+- Letter 'A' consists of three separate strokes (three pen movements)
+- **First stroke** (left diagonal): Starts at bottom-left (0,0) and goes to the top center (2,5)
+- **Second stroke** (right diagonal): Starts at top center (2,5) and goes to bottom-right (4,0)
+  - Note: This shares the same starting point as the end of the first stroke, but they're defined as separate strokes. The motion control system will detect this continuity and keep the pen down.
+- **Third stroke** (horizontal bar): Draws from left (1, 2.5) to right (3, 2.5) at the middle height
+- All coordinates are on a normalized 4×5 grid, which will be scaled later
+- The first number in each pair is the X coordinate (horizontal), the second is the Z coordinate (vertical on the drawing surface)
+
+---
+
 ### Stroke Creation Helpers:
 
 **1. Linear Stroke Generator**
+
+This helper function creates straight-line paths by accepting a variable number of coordinate pairs.
+
 ```csharp
 List<Vector3> Stroke(params float[] coords)
 {
@@ -350,7 +469,23 @@ List<Vector3> Stroke(params float[] coords)
 }
 ```
 
+**Explanation:**
+- `params float[] coords` allows you to pass any number of coordinate values as parameters
+- The function iterates through coordinates in pairs (x, z)
+- For each pair, it creates a Vector3 with:
+  - X = coords[i] (horizontal position)
+  - Y = 0 (always zero in the local coordinate system; height is controlled separately)
+  - Z = coords[i+1] (vertical position on the drawing surface)
+- **Example usage:** `Stroke(0,0, 2,5, 4,0)` creates three points: (0,0,0), (2,0,5), (4,0,0)
+  - This represents a continuous stroke connecting three points (like drawing a 'V' shape)
+- The robot will move smoothly through all these points in sequence without lifting the pen
+
+---
+
 **2. Parametric Arc Generator**
+
+This is the most sophisticated part of the path generator. It creates smooth circular or elliptical arcs using trigonometric functions.
+
 ```csharp
 List<Vector3> CreateArc(float cx, float cz, float w, float h, 
                         float startAng, float endAng, int res = 20)
@@ -370,7 +505,37 @@ List<Vector3> CreateArc(float cx, float cz, float w, float h,
 }
 ```
 
+**Parameters:**
+- `cx, cz`: Center point of the arc
+- `w, h`: Width and height radii (for elliptical arcs; use same value for circles)
+- `startAng, endAng`: Start and end angles in degrees
+  - 0° = right (positive X direction)
+  - 90° = up (positive Z direction)
+  - 180° = left (negative X direction)
+  - 270° or -90° = down (negative Z direction)
+- `res`: Resolution (number of line segments to approximate the arc, default 20)
+
+**Explanation:**
+- **Loop through resolution:** For i from 0 to 20 (21 points total for default resolution)
+- **Interpolation parameter t:** Goes from 0.0 to 1.0 across the loop
+  - At i=0: t=0.0 (arc start)
+  - At i=10: t=0.5 (arc midpoint)
+  - At i=20: t=1.0 (arc end)
+- **Angle interpolation:** `Mathf.Lerp(startAng, endAng, t)` smoothly interpolates between start and end angles
+  - Example: startAng=0, endAng=90, t=0.5 → ang=45°
+  - `* Mathf.Deg2Rad` converts degrees to radians for the trig functions
+- **Parametric circle equation:**
+  - `x = cx + cos(ang) * w`: Horizontal position along the arc
+  - `z = cz + sin(ang) * h`: Vertical position along the arc
+- **Why this works:** Cosine and sine trace out a circle when the angle varies. By using different radii (w and h), we can create ellipses.
+- **Result:** Instead of a jagged approximation, we get 20 smooth segments that closely approximate a perfect curve
+
+---
+
 **Example: Letter 'S' Implementation**
+
+The letter 'S' demonstrates how to combine multiple arcs to create complex curved shapes.
+
 ```csharp
 case 'S':
     // Top arc: starts at 45°, goes counterclockwise to 270°
@@ -381,7 +546,29 @@ case 'S':
     break;
 ```
 
+**Explanation:**
+- **Top arc:**
+  - Center: (2, 3.75) - positioned in the upper portion
+  - Radii: width=2, height=1.25 (elliptical, wider than tall)
+  - Starts at 45° (upper-right) and sweeps counterclockwise to 270° (bottom)
+  - Angle span: 270° - 45° = 225° of rotation
+  - This creates the curved top portion of the 'S'
+  - End point is at the middle-left of the arc
+- **Bottom arc:**
+  - Center: (2, 1.25) - positioned in the lower portion
+  - Radii: width=2, height=1.25 (same ellipse size as top arc)
+  - Starts at 90° (top of arc) and sweeps clockwise to -135°
+  - Angle span: 90° to -135° = 225° in the opposite direction
+  - This creates the curved bottom portion of the 'S'
+- **Key design:** The end point of the top arc (270° on the top arc) is at approximately the same location as the start point of the bottom arc (90° on the bottom arc)
+- The continuity detection system will recognize these points are connected and won't lift the pen between them, creating a smooth 'S' shape
+
+---
+
 **Example: Letter 'G' Implementation**
+
+Letter 'G' shows how to combine an arc with a straight line.
+
 ```csharp
 case 'G':
     // Main circular arc: 45° to 360° (315° span)
@@ -392,7 +579,25 @@ case 'G':
     break;
 ```
 
+**Explanation:**
+- **Main arc:**
+  - Center: (2.5, 2.5) - centered in the letter
+  - Radii: 2.5 for both width and height (perfect circle)
+  - Starts at 45° (upper-right)
+  - Ends at 360° (same as 0°, which is the right side)
+  - Angle span: 315° (almost a full circle, leaving a gap on the upper-right)
+  - End point calculation: x = 2.5 + cos(360°)×2.5 = 2.5 + 2.5 = 5.0, z = 2.5 + sin(360°)×2.5 = 2.5
+- **Hook stroke:**
+  - Starts at (5.0, 2.5) - exactly where the arc ended
+  - Ends at (2.5, 2.5) - the center of the circle
+  - This draws a horizontal line inward, creating the characteristic 'G' hook
+- **Perfect connection:** The arc's end point and the hook's start point have identical coordinates, so the motion controller keeps the pen down for a continuous stroke
+
+---
+
 ### Coordinate Processing Pipeline:
+
+After defining the letter geometry, we need to transform these normalized coordinates into real world positions.
 
 ```csharp
 private List<Vector3> ProcessPoints(List<Vector3> rawPoints, float xOffset)
@@ -414,11 +619,27 @@ private List<Vector3> ProcessPoints(List<Vector3> rawPoints, float xOffset)
 }
 ```
 
+**Explanation:**
+- **Input:** `rawPoints` contains the normalized coordinates (on the 4×5 grid), `xOffset` is the horizontal offset for letter spacing
+- **Character offset:** `p.x + xOffset` shifts each letter to the right based on how many letters have been drawn before
+  - First letter: xOffset = 0
+  - Second letter: xOffset = 4 + spacing
+  - Third letter: xOffset = 2 × (4 + spacing)
+- **Scaling:** Multiplying by `scale` (default 20) converts the small normalized coordinates to robot-sized coordinates
+  - Example: A point at (2, 5) becomes (40, 100) with scale=20
+- **Add base offset:** The `offset` parameter lets you shift the entire text to a different location on the drawing surface
+- **World transformation:** `transform.TransformPoint()` converts from local space to world space
+  - Takes into account the PathGenerator object's position, rotation, and scale in the Unity scene
+  - This allows you to position and rotate the text by moving the PathGenerator GameObject
+- **Result:** A list of world-space Vector3 coordinates ready for the robot to follow
+
 ## Motion Control Strategy
 
-The `RobotWriter.cs` implements an optimized pen control algorithm:
+The `RobotWriter.cs` implements an optimized pen control algorithm that minimizes unnecessary pen lifts and creates smooth, efficient drawing motions. This is implemented as a coroutine-based state machine.
 
 ### Stroke Continuity Detection:
+
+Before executing each stroke, the system checks whether it connects to the next stroke. This allows the pen to stay down when drawing connected segments.
 
 ```csharp
 // Check if next stroke connects to current stroke
@@ -439,7 +660,27 @@ if (strokeIndex < strokes.Count - 1)
 }
 ```
 
+**Explanation:**
+- **Check if there's a next stroke:** `strokeIndex < strokes.Count - 1` ensures we don't try to access an out-of-bounds stroke
+- **Get endpoint positions:**
+  - `currentEnd`: The last point of the current stroke (where the pen will be after drawing this stroke)
+  - `nextStart`: The first point of the next stroke (where the pen needs to be to start the next stroke)
+- **Flatten to 2D:** We create `endFlat` and `nextStartFlat` by setting the Y component to 0
+  - This ignores the height difference and only compares horizontal (XZ) positions
+  - We don't care if one point is at penUpHeight and another at penDownHeight; we only care if they're in the same XZ location
+- **Distance check:** `Vector3.Distance(endFlat, nextStartFlat) < 0.01f`
+  - If the horizontal distance is less than 0.01 units, we consider them "the same point"
+  - The threshold of 0.01 is small enough to catch intentional connections but large enough to handle floating-point rounding errors
+- **Set flag:** If the strokes connect, we set `nextStrokeIsContinuous = true`
+- **Purpose:** This information is used later to decide whether to lift the pen after completing the current stroke
+  - If continuous: Keep pen down and immediately start drawing the next stroke
+  - If not continuous: Lift pen, move to the new position, then lower pen again
+
+---
+
 ### State Machine Logic:
+
+The drawing sequence for each stroke follows a state machine with 4 possible states. The system intelligently skips states when they're not needed.
 
 ```csharp
 // Determine if pen is already at start position
@@ -481,7 +722,78 @@ if (!nextStrokeIsContinuous)
 }
 ```
 
+**Explanation:**
+
+**Pre-State: Check Current Position**
+- `isAlreadyAtStartPoint` checks if the robot is already horizontally positioned at the stroke's start point
+- We only check XZ position (horizontal), ignoring Y (height)
+- This is true when the previous stroke ended at the same location as the current stroke starts
+- **Example:** Drawing letter 'M' - stroke 2 starts where stroke 1 ended, so no horizontal movement is needed
+
+**State 1: Move to Start Position (Hover)**
+- **Condition 1:** `if (strokeIndex > 0 && !isAlreadyAtStartPoint)`
+  - For strokes after the first one (strokeIndex > 0)
+  - And only if we're not already at the start position
+  - Move to the start point at the "pen up" height (hovering above the drawing surface)
+- **Condition 2:** `else if (strokeIndex == 0)`
+  - The very first stroke always needs to move to its start position
+  - This ensures the robot starts from a safe home position
+- **Why this matters:** Prevents the pen from dragging across the surface when moving between disconnected strokes
+- **Optimization:** If the previous stroke ended where this one starts, this entire state is skipped
+
+**State 2: Lower Pen**
+- **Condition:** `if (!isAlreadyAtStartPoint)`
+  - Only lower the pen if we moved to a new position
+  - If we're already at the right XZ position from a continuous stroke, the pen is already down
+- **Action:** Move vertically from `penUpHeight` to `penDownHeight`
+- **Trail renderer:** `_trail.emitting = true` starts drawing the visible ink line
+- **Example:** For letter 'A' stroke 1, this lowers the pen from height 20 to height 0
+
+**State 3: Draw the Stroke**
+- **Loop:** `for (int i = 1; i < currentStroke.Count; i++)`
+  - Start at index 1 (not 0) because we're already at the first point
+  - Move through all remaining points in the stroke
+- **Action:** `MoveTo(new Vector3(p.x, penDownHeight, p.z))`
+  - Keep the pen at drawing height (penDownHeight) for all points
+  - Only the XZ position changes as we trace out the letter
+- **Result:** A continuous line is drawn connecting all points in the stroke
+- **Example:** For a 20-point arc, this executes 19 MoveTo commands
+
+**State 4: Lift Pen**
+- **Condition:** `if (!nextStrokeIsContinuous)`
+  - Only lift the pen if the next stroke is NOT connected to this one
+  - This is the key optimization—we skip this state for connected strokes
+- **Actions:**
+  - `_trail.emitting = false` stops drawing the visible ink line
+  - Move vertically from penDownHeight to penUpHeight
+  - Stay at the current XZ position (the end of the stroke)
+- **Example:** 
+  - Letter 'A': Lift pen after each of the 3 separate strokes
+  - Letter 'M': Don't lift pen between the 5 connected line segments
+
+**State Machine Flow Examples:**
+
+*Letter 'M' (connected strokes):*
+1. Stroke 1: State 1 → State 2 → State 3 → ~~State 4 (skipped)~~
+2. Stroke 2: ~~State 1 (skipped)~~ → ~~State 2 (skipped)~~ → State 3 → ~~State 4 (skipped)~~
+3. Stroke 3: ~~State 1 (skipped)~~ → ~~State 2 (skipped)~~ → State 3 → ~~State 4 (skipped)~~
+4. Stroke 4: ~~State 1 (skipped)~~ → ~~State 2 (skipped)~~ → State 3 → ~~State 4 (skipped)~~
+5. Stroke 5: ~~State 1 (skipped)~~ → ~~State 2 (skipped)~~ → State 3 → State 4
+
+Result: Pen is only lowered once and lifted once for the entire letter!
+
+*Letter 'A' (disconnected strokes):*
+1. Stroke 1: State 1 → State 2 → State 3 → State 4
+2. Stroke 2: State 1 → State 2 → State 3 → State 4
+3. Stroke 3: State 1 → State 2 → State 3 → State 4
+
+Result: Pen is lowered and lifted for each separate stroke.
+
+---
+
 ### Smooth Interpolation:
+
+The `MoveTo` coroutine provides frame-independent, smooth linear interpolation between positions.
 
 ```csharp
 IEnumerator MoveTo(Vector3 destination)
@@ -507,6 +819,85 @@ IEnumerator MoveTo(Vector3 destination)
 }
 ```
 
+**Explanation:**
+
+**Setup Phase:**
+- `target = scaraController.targetObj` - Get reference to the target object (the invisible point the robot follows)
+- `dist = Vector3.Distance(target.position, destination)` - Calculate the straight-line distance to travel
+- **Safety check:** `if (writeSpeed <= 0.1f) writeSpeed = 1f`
+  - Prevents division by zero or near-zero values
+  - Ensures motion always completes in finite time
+- `duration = dist / writeSpeed` - Calculate how long the movement should take
+  - Example: distance=100 units, speed=20 units/sec → duration=5 seconds
+  - This ensures constant speed regardless of distance
+
+**Interpolation Loop:**
+- `elapsed = 0f` - Initialize the time counter
+- `start = target.position` - Store the starting position
+- **While loop:** Continues until we've spent `duration` seconds moving
+- `target.position = Vector3.Lerp(start, destination, elapsed / duration)`
+  - **Lerp** (Linear Interpolation) smoothly blends between start and destination
+  - The third parameter `elapsed / duration` is the interpolation factor (0 to 1)
+  - At elapsed=0: factor=0 → position=start
+  - At elapsed=duration/2: factor=0.5 → position=halfway between start and destination
+  - At elapsed=duration: factor=1 → position=destination
+- `elapsed += Time.deltaTime` - Increment the timer by the time since the last frame
+  - `Time.deltaTime` is approximately 0.0167 seconds at 60 FPS
+  - This makes the motion frame-rate independent (same speed at 30 FPS or 120 FPS)
+- `yield return null` - Pause the coroutine and resume on the next frame
+  - This is what makes the movement animated rather than instant
+  - The robot moves a little bit each frame, creating smooth motion
+
+**Finalization:**
+- `target.position = destination` - Snap to the exact final position
+- **Why this is necessary:** Due to floating-point precision and timing, the loop might end slightly before reaching factor=1.0
+- This guarantees we end up exactly at the destination, which is crucial for stroke continuity detection
+
+**Key Advantages:**
+- **Constant velocity:** The speed is the same regardless of distance (unlike exponential interpolation)
+- **Frame-rate independent:** Runs at the same real-world speed on different computers
+- **Predictable timing:** You can calculate exactly when the motion will complete
+- **Smooth visual:** No jerky movements or sudden stops
+
+---
+
+## Summary of Algorithm Integration
+
+The three major components work together in a pipeline:
+
+1. **Path Generation (ManualPathGenerator)** converts user text into world-space waypoints
+   - Input: String "HELLO"
+   - Output: List of stroke sequences with 3D coordinates
+
+2. **Motion Control (RobotWriter)** orchestrates the drawing sequence
+   - Manages pen up/down states
+   - Detects stroke continuity to optimize pen lifts
+   - Commands the target object to move through waypoints smoothly
+
+3. **Inverse Kinematics (ScaraController)** follows the target in real-time
+   - Runs every frame in Update() loop
+   - Calculates joint angles (θ₁, θ₂, d₃) needed to reach target position
+   - Applies rotations to Unity Transform components
+
+**Execution Flow:**
+```
+User clicks "Start" 
+  → RobotWriter receives text from UI
+  → PathGenerator creates stroke list
+  → WriteRoutine coroutine begins
+    → For each stroke:
+      → MoveTo(start position)
+        → ScaraController.Update() runs continuously
+          → SolveIK(targetObj.position)
+          → Apply joint rotations
+      → MoveTo(each waypoint in stroke)
+        → Robot traces out the letter shape
+      → Conditionally lift pen
+  → Return to home position
+```
+
+This separation of concerns makes the code modular, testable, and easy to extend with new features.
+
 **Benefits of This Approach:**
 - **Reduced Air Time**: Eliminates unnecessary pen lifts for connected strokes
 - **Smooth Motion**: Linear interpolation prevents jerky movements
@@ -514,7 +905,6 @@ IEnumerator MoveTo(Vector3 destination)
 - **Predictable Timing**: Duration is calculated deterministically from distance
 
 ---
-
 
 ## Testing and Results
 
