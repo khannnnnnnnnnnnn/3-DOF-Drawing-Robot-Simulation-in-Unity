@@ -63,153 +63,139 @@ The goal of this project is to simulate the motion of a 3-DOF planar manipulator
 
 ## Theory and Related Work
 
-### Overview of 3-DOF Manipulators
-A 3-DOF planar manipulator typically uses rotational joints to perform tasks in a two-dimensional plane. In this configuration, the manipulator's movement is determined by three rotational degrees of freedom (DOF), which control the position and orientation of the end effector. This section explores the geometric and mathematical background necessary to understand the robot's kinematics.
+### SCARA Robot Architecture
 
-A common 3-DOF manipulator is the **R-R-P (Revolute-Revolute-Prismatic) chain**, where two joints are rotational (revolute) and one is translational (prismatic). The configuration is used for tasks such as drawing, where precision and control over the position and orientation of the end effector are required.
+SCARA (Selective Compliance Assembly Robot Arm) robots are widely used in industrial automation for tasks requiring high-speed planar motion with vertical compliance. The typical SCARA configuration consists of:
 
-### Kinematics Modeling: DH Parameters
-The Denavit-Hartenberg (DH) parameterization is widely used for modeling the kinematics of robotic manipulators. It allows for a systematic way to derive transformation matrices that describe the relationship between the coordinate frames of each link in the manipulator.
+- **Two parallel rotational joints** (θ₁, θ₂) that control horizontal positioning
+- **One vertical prismatic joint** (d₃ or z) that controls height
+- **High rigidity in the vertical direction** while maintaining compliance in the horizontal plane
 
-Each link of a manipulator is associated with four DH parameters:
-- $$\( \theta_i \)$$: Joint angle (for revolute joints).
-- $$\( d_i \)$$: Link offset (for prismatic joints).
-- $$\( a_i \)$$: Link length.
-- $$\( \alpha_i \)$$: Link twist.
+This configuration is ideal for pick-and-place operations, assembly tasks, and, as demonstrated in this project, automated drawing applications.
 
-The transformation matrix from the \(i-1\)-th to the \(i\)-th link is given by:
+**Advantages of SCARA Configuration:**
+- High speed and repeatability in the horizontal plane
+- Simple kinematic structure allowing for closed-form inverse kinematics solutions
+- Well-defined workspace (annular region)
+- Minimal coupling between vertical and horizontal motion
 
-$$
-T_i^{i-1} = 
-\begin{bmatrix}
-\cos(\theta_i) & -\sin(\theta_i)\cos(\alpha_i) & \sin(\theta_i)\sin(\alpha_i) & a_i\cos(\theta_i) \\
-\sin(\theta_i) & \cos(\theta_i)\cos(\alpha_i) & -\cos(\theta_i)\sin(\alpha_i) & a_i\sin(\theta_i) \\
-0 & \sin(\alpha_i) & \cos(\alpha_i) & d_i \\
-0 & 0 & 0 & 1
-\end{bmatrix}
-$$
+### Kinematics Foundation
+
+The robot's motion is described using coordinate transformations that relate the base frame to the end-effector frame. For our SCARA robot:
+
+**Base Frame Alignment:**
+- The robot base is rotated -90° around the X-axis in Unity's coordinate system
+- This rotation maps:
+  - Unity's X-axis → Robot's Local X (Right)
+  - Unity's Y-axis → Robot's Local Y (Forward/Depth)
+  - Unity's Z-axis → Robot's Local Z (Height/Up)
+
+**Link Parameters:**
+- L₁ = Length of first link (shoulder to elbow) = 230 units
+- L₂ = Length of second link (elbow to end-effector) = 135 units
+- Combined reach: L₁ + L₂ = 365 units
+- Minimum reach: |L₁ - L₂| = 95 units
+
+**Joint Variables:**
+- θ₁: Shoulder rotation angle (around vertical axis)
+- θ₂: Elbow rotation angle (around vertical axis)
+- d₃ or h: Vertical displacement of prismatic joint
+
+### Inverse Kinematics for R-R-P Configuration
+
+The inverse kinematics problem for this SCARA robot can be decomposed into two independent sub-problems:
+
+#### 1. Planar (Horizontal) Solution
+
+Given a target position (xₜ, yₜ, zₜ) in world space, we first transform it to the robot's local coordinate frame. The coordinate transformation projects the target vector onto the robot's coordinate axes to obtain local coordinates (x, depth, height).
+
+The planar distance from shoulder to target:
+
+$$D = \sqrt{x^2 + \text{depth}^2}$$
+
+**Elbow Angle Solution:**
+Using the law of cosines for the triangle formed by L₁, L₂, and D:
+
+$$\cos(\theta_2) = \frac{D^2 - L_1^2 - L_2^2}{2 L_1 L_2}$$
+
+$$\theta_2 = \arccos\left(\text{clamp}\left(\frac{D^2 - L_1^2 - L_2^2}{2 L_1 L_2}, -1, 1\right)\right)$$
+
+**Shoulder Angle Solution:**
+The shoulder angle is computed using the target direction and the internal triangle geometry:
+
+$$\beta = \arctan2(\text{depth}, x)$$
+
+$$\phi = \arctan2(L_2 \sin(\theta_2), L_1 + L_2 \cos(\theta_2))$$
+
+$$\theta_1 = \beta - \phi$$
 
 Where:
-- $$\( T_i^{i-1} \)$$ is the transformation matrix from frame $$\( i-1 \)$$ to frame $$\( i \)$$.
-- The parameters $$\( \theta_i \), \( d_i \), \( a_i \), and \( \alpha_i \)$$ are specific to each link and joint type.
+- β is the angle from the shoulder to the target
+- φ is the internal angle of the triangle at the shoulder joint
 
-Using the DH parameters, we can calculate the overall transformation matrix from the base to the end effector by multiplying the transformation matrices for each link:
+#### 2. Vertical (Prismatic) Solution
 
-$$
-T = T_1^0 \cdot T_2^1 \cdot T_3^2 \cdot \dots \cdot T_n^{n-1}
-$$
+The prismatic joint displacement is simply:
 
-This transformation matrix describes the position and orientation of the end effector relative to the base frame.
+$$d_3 = \text{clamp}(\text{height}, h_{\min}, h_{\max})$$
 
-### Forward and Inverse Kinematics
-- **Forward Kinematics**: Given the joint parameters $$\( \theta_1, \theta_2, \dots, \theta_n \)$$ (or \$$( d_i \)$$ for prismatic joints), forward kinematics calculates the position of the end effector in space. The end-effector position is obtained by applying the cumulative transformation from the base to the end effector using the DH parameter model.
+Where h_min = 0 and h_max = 50 units in this implementation.
 
-$$
-\text{End Effector Position} = \begin{bmatrix} x \\ y \\ z \end{bmatrix} = T_1^0 \cdot T_2^1 \cdot T_3^2 \cdot \dots \cdot T_n^{n-1} \cdot \begin{bmatrix} x_0 \\ y_0 \\ z_0 \end{bmatrix}
-$$
+**Workspace Constraints:**
+- Maximum reach: D ≤ L₁ + L₂ - 0.001 (365 units)
+- Minimum reach: D ≥ |L₁ - L₂| + 0.001 (95 units)
+- Height range: 0 ≤ h ≤ 50 units
 
-Where 
+The implementation includes small epsilon values (0.001) to prevent numerical singularities at workspace boundaries.
 
-$$
-\begin{bmatrix}
-x_0 \\
-y_0 \\
-z_0
-\end{bmatrix}
-$$
+### Workspace Analysis
 
+The SCARA robot's workspace forms an annular (ring-shaped) region in the horizontal plane:
 
- is the position of the end effector in its local frame.
+**Outer Boundary (Maximum Reach):**
+$$r_{\text{outer}} = L_1 + L_2 = 365 \text{ units}$$
 
-- **Inverse Kinematics**: Given the desired position of the end effector $$\( (x, y, z) \)$$, inverse kinematics calculates the joint parameters $$\( \theta_1, \theta_2, \dots, \theta_n \)$$ (or $$\( d_i \)$$ for prismatic joints) that achieve this position. For a 3-DOF manipulator, inverse kinematics can have multiple solutions, especially for revolute joints (elbow-up vs. elbow-down configurations). 
+**Inner Boundary (Minimum Reach):**
+$$r_{\text{inner}} = |L_1 - L_2| = 95 \text{ units}$$
 
-For a planar manipulator with two revolute joints (R-R) and one prismatic joint (P), the inverse kinematics equations can be derived using geometric methods or numerical solvers. A common method for solving inverse kinematics for the R-R chain involves using the law of cosines and the sine rule.
+The workspace visualization displays these boundaries as red circular rings, helping users understand the valid operating region. The workspace is centered at the shoulder pivot point, not the robot base, ensuring accurate representation of the reachable area.
 
-$$
-\theta_2 = \cos^{-1}\left( \frac{x^2 + y^2 - L_1^2 - L_2^2}{2L_1L_2} \right)
-$$
+**Vertical Workspace:**
+- The prismatic joint provides vertical displacement from 0 to 50 units
+- This creates a three-dimensional annular cylinder workspace
 
-$$
-\theta_1 = \tan^{-1}\left( \frac{y}{x} \right) - \tan^{-1}\left( \frac{L_2 \sin(\theta_2)}{L_1 + L_2 \cos(\theta_2)} \right)
-$$
+### Trajectory Planning
 
-Where $$\( L_1 \)$$ and $$\( L_2 \)$$ are the lengths of the links, and $$\( (x, y) \)$$ is the position of the end effector.
+The trajectory planning system converts high-level drawing commands (letters) into low-level motion primitives (waypoints).
 
-### Differential Kinematics & Jacobian Matrix
-The Jacobian matrix $$\( J \)$$ relates the joint velocities $$\( \dot{\theta_1}, \dot{\theta_2}, \dots, \dot{\theta_n} \)$$ (for revolute joints) and $$\( \dot{d_3} \)$$ (for prismatic joints) to the end-effector velocities $$\( \dot{x}, \dot{y}, \dot{z} \)$$ in Cartesian space:
+**Path Representation:**
+Each letter is defined as a collection of strokes, where each stroke is a list of 3D waypoints. The path generator processes text input and returns a nested list structure representing all strokes needed to draw the complete text.
 
+**Stroke Types:**
 
-$$
-\begin{bmatrix}
-\dot{x} \\
-\dot{y} \\
-\dot{z}
-\end{bmatrix}
-\text{ = }
-J \cdot
-\begin{bmatrix}
-\dot{\theta_1} \\
-\dot{\theta_2} \\
-\dot{d_3}
-\end{bmatrix}
-$$
+1. **Linear Strokes:** Defined by consecutive waypoints connected by straight lines
+   - Example: Letter 'E' consists of 4 connected line segments
+   - Used for straight edges and angular features
 
+2. **Arc Strokes:** Generated using parametric circle equations
+   - Center: (cₓ, cᵧ)
+   - Radii: (rₓ, rᵧ) for elliptical arcs
+   - Angular span: [θ_start, θ_end]
+   - Resolution: 20 interpolated points per arc
 
-Where the Jacobian matrix is derived by differentiating the forward kinematics equations with respect to time. The Jacobian matrix is crucial for controlling the velocity of the end effector in task space and is used to compute the required joint velocities for a desired end-effector velocity.
+**Arc Generation Formula:**
 
-For a 3-DOF manipulator, the Jacobian can be computed based on the specific geometry of the robot:
+$$x(t) = c_x + r_x \cos\left(\theta_{\text{start}} + t(\theta_{\text{end}} - \theta_{\text{start}})\right)$$
 
-$$
-J = \begin{bmatrix}
-\frac{\partial x}{\partial \theta_1} & \frac{\partial x}{\partial \theta_2} & \frac{\partial x}{\partial d_3} \\
-\frac{\partial y}{\partial \theta_1} & \frac{\partial y}{\partial \theta_2} & \frac{\partial y}{\partial d_3} \\
-\frac{\partial z}{\partial \theta_1} & \frac{\partial z}{\partial \theta_2} & \frac{\partial z}{\partial d_3}
-\end{bmatrix}
-$$
+$$z(t) = c_z + r_z \sin\left(\theta_{\text{start}} + t(\theta_{\text{end}} - \theta_{\text{start}})\right)$$
 
-### Trajectory Planning and Time Scaling
-Trajectory planning involves generating smooth paths for the robot’s end effector. The path is typically represented by a sequence of points in Cartesian space, and time scaling ensures that the robot moves along this path at a constant velocity or with a predefined speed profile.
+where t ∈ [0, 1] is the interpolation parameter.
 
-A common trajectory profile is the **cubic spline**, which is used to interpolate between waypoints. The cubic spline ensures that the velocity and acceleration are continuous along the path:
-
-$$
-q(t) = a_0 + a_1t + a_2t^2 + a_3t^3
-$$
-
-Where $$\(q(t)\)$$ is the position of the end effector at time $$\(t\)$$, and the coefficients $$\(a_0, a_1, a_2, a_3\)$$ are determined based on boundary conditions (such as initial and final positions, velocities, and accelerations).
-
-### Continuous Motion Selector and Model Alignment
-When solving inverse kinematics for manipulator configurations with multiple possible solutions (e.g., elbow-up and elbow-down), it is crucial to select the solution that ensures smooth and continuous motion. The **Continuous Motion Selector** algorithm ensures that the robot transitions between kinematic solutions smoothly, minimizing abrupt changes in joint angles that would otherwise cause jerky motion.
-
-Additionally, alignment issues between the kinematic model and the Unity coordinate system can arise. These issues are handled by applying an **Angular Offset** to correct for any misalignments, ensuring that the robot’s motion in Unity matches the desired kinematic model.
+**Coordinate Transformation Pipeline:**
+The path generation system applies scaling and offset transformations to convert normalized letter coordinates (defined on a 4×5 grid) into world space coordinates. This ensures that letter definitions remain resolution-independent and can be easily scaled or repositioned.
 
 ---
 
-
-## System Overview
-This section provides an overview of the 3-DOF Drawing Robot System, including its key components and how they interact to achieve the goal of drawing predefined shapes. Below is a diagram that illustrates the structure and workflow of the system.
-
-### System Diagram
-<img width="1892" height="607" alt="image" src="https://github.com/user-attachments/assets/9ee08021-51c7-4a36-872a-c1318d871712" />
-
-
-### Key Components 
-
-**Input Section:**
-- **Link Parameters (L1, L2, L3):** Define the lengths of the robot’s links. These are constants that determine the manipulator's physical size.
-- **Target Alphabet (Character):** The user inputs an uppercase letter, which is processed by the trajectory planner to generate the drawing path.
-
-**Toolbox:**
-- **Forward Kinematics (DH Parameters):** Calculates the end-effector position based on joint angles using Denavit-Hartenberg parameters.
-- **Trajectory Planner (Path Generation):** Converts the target alphabet and drawing parameters into a set of target coordinates `[x(t), y(t), z(t)]` that define the drawing path.
-- **Inverse Kinematics Solver:** Solves for joint angles (`θ1`, `θ2`) and linear distance (`d3`) from the target coordinates to move the robot to the desired position.
-- **Continuous Motion Selector:** Ensures smooth and continuous movement by selecting the best inverse kinematic solution, avoiding abrupt changes in joint angles.
-
-**Output Section:**
-- **Joint Parameters (θ1, θ2, d3) & Joint Velocities (θ1̇, θ2̇, d3̇):** Control the robot’s movement by defining joint positions and velocities.
-- **Visualization & Simulation (Unity):** Sends joint parameters and velocities to Unity for 3D visualization of the robot’s motion as it draws the letter, allowing real-time tracking of movements and speed.
-
----
 
 ## Installation
 
