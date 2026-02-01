@@ -244,61 +244,277 @@ https://github.com/user-attachments/assets/a6331f78-85c7-4e6b-90cb-6fc346642f6c
 
 ## Algorithms and Methods
 
-This section details the primary algorithms used to enable the 3-DOF R-R-P manipulator simulation in Unity, focusing on the inverse kinematics (IK) solution and the custom path generation pipeline.
+This section details the primary algorithms used to enable the 3-DOF R-R-P manipulator simulation in Unity, focusing on the inverse kinematics solution and the custom path generation pipeline.
 
-### Inverse Kinematics (IK) Solver
+## Inverse Kinematics Solver
 
-The simulation uses a geometric approach to solve the Inverse Kinematics problem for the R-R chain, determining the required joint angles ($\theta_1$, $\theta_2$) for any given Cartesian target point $(x, y)$. The third DOF (the Prismatic joint, $d_3$) directly controls the $z$-coordinate (height) and is solved linearly.
+The IK solver in `ScaraController.cs` implements a geometric approach optimized for the R-R-P configuration:
 
-The core steps are:
+### Algorithm Steps:
 
-- Coordinate Mapping: The target point, $P_{target} = (x_t, y_t, z_t)$, is first transformed into the local coordinate frame of the robot's base. The height, $z_t$, is directly mapped to the prismatic joint extension $d_3$. The planar coordinates, $(x, y)$, are used for angular calculation.
+**1. Coordinate Frame Transformation**
+```csharp
+// Calculate shoulder pivot position in world space
+Vector3 shoulderWorldPos = transform.position;
+shoulderWorldPos.x = shoulderRotationBone.position.x;
+shoulderWorldPos.z = shoulderRotationBone.position.z;
 
-- Elbow Angle ($\theta_2$): The angle of the second joint is calculated using the Law of Cosines, based on the triangle formed by the two links ($L_1$, $L_2$) and the distance to the target ($D = \sqrt{x^2 + y^2}$):
+// Project target onto robot's coordinate axes
+Vector3 diffWorld = targetPos - shoulderWorldPos;
+float x = Vector3.Dot(diffWorld, transform.right);      // Local X
+float depth = Vector3.Dot(diffWorld, transform.up);     // Local Y
+float height = Vector3.Dot(diffWorld, transform.forward); // Local Z
+```
 
-$$
-\cos(\theta_2) = \frac{x^2 + y^2 - L_1^2 - L_2^2}{2 L_1 L_2}
-$$
+**2. Planar Distance Calculation**
+```csharp
+float dist = Mathf.Sqrt(x*x + depth*depth);
+float combinedLength = L1 + L2;
 
-$$
-\theta_2 = \arccos\left(\frac{D^2 - L_1^2 - L_2^2}{2 L_1 L_2}\right)
-$$
+// Workspace clamping to prevent singularities
+if (dist > combinedLength) dist = combinedLength - 0.001f;
+if (dist < Mathf.Abs(L1 - L2)) dist = Mathf.Abs(L1 - L2) + 0.001f;
+```
 
-- Shoulder Angle ($\theta_1$): The angle of the first joint is calculated by finding the angle to the target and subtracting the internal angle formed by the elbow joint:
+**3. Elbow Angle Solution (Law of Cosines)**
+```csharp
+float cosT2 = (dist*dist - L1*L1 - L2*L2) / (2 * L1 * L2);
+float theta2 = Mathf.Acos(Mathf.Clamp(cosT2, -1f, 1f));
+```
 
-$$
-\theta_1 = \text{atan2}(y, x) - \text{atan2}(L_2 \sin(\theta_2), L_1 + L_2 \cos(\theta_2))
-$$
+**4. Shoulder Angle Solution (Geometric Decomposition)**
+```csharp
+float baseAngle = Mathf.Atan2(depth, x);
+float innerAngle = Mathf.Atan2(
+    L2 * Mathf.Sin(theta2),
+    L1 + L2 * Mathf.Cos(theta2)
+);
+float theta1 = baseAngle - innerAngle;
+```
 
-- Continuous Motion Selector: The $\theta_1$ and $\theta_2$ solutions are continuously applied in the Unity $\text{Update()}$ loop. The use of $\text{atan2}$ inherently provides robust quadrant handling, and the geometric method avoids singularities common in matrix-based solvers within the workspace.
+**5. Apply Joint Rotations**
+```csharp
+float t1Deg = theta1 * Mathf.Rad2Deg;
+float t2Deg = theta2 * Mathf.Rad2Deg;
 
-### Manual Path Generator (Trajectory Planning)
+// Apply inversion flags if needed
+if (!invertShoulderRotation) t1Deg = -t1Deg;
+if (invertElbowRotation) t2Deg = -t2Deg;
 
-The Trajectory Planner converts user-inputted text into a continuous sequence of 3D waypoints. To guarantee precise and reproducible motion for both straight and curved segments, a Manual Stroke Definition algorithm is employed:
+// Set joint rotations using quaternions
+shoulderRotationBone.localRotation = 
+    _shoulderStartRot * Quaternion.AngleAxis(t1Deg + shoulderOffset, Vector3.up);
+elbowJoint.localRotation = 
+    _elbowStartRot * Quaternion.AngleAxis(t2Deg + elbowOffset, Vector3.up);
+```
 
-- Stroke Definition: Each uppercase letter ($A$ through $Z$) is decomposed into a list of constituent strokes. These strokes are hard-coded as sequences of coordinate points $(x, z)$ on a normalized $4 \times 5$ grid.
+**6. Prismatic Joint Control**
+```csharp
+float h = Mathf.Clamp(height, minHeight, maxHeight);
+ApplyLift(h);
+```
 
-- Curved Segment Generation (Arc Interpolation): For letters requiring smooth curves (e.g., $C, S, G, O$), the definition uses the custom function $\text{CreateArc}(c_x, c_z, r_x, r_z, \text{startAngle}, \text{endAngle})$. This function mathematically generates a dense set of intermediate points ($\approx 20$ points) between the start and end angles using $\cos$ and $\sin$, ensuring the robot follows a smooth, continuous curve rather than jagged line segments.
+**Advantages of this Approach:**
+- **Computational Efficiency**: Closed-form solution (no iterative solving)
+- **Deterministic**: Same input always produces same output
+- **Real-time Performance**: Suitable for every-frame execution
+- **Singularity Handling**: Workspace clamping prevents undefined states
 
-- Scaling and Offset: The generated normalized points are then scaled by the user-defined scale factor and translated by the current letter's $x$-offset before being converted to world coordinates via $\text{TransformPoint}$.
+## Path Generation System
 
-### Optimized Motion Control (Pen Up/Down)
+The `ManualPathGenerator.cs` implements a stroke-based letter representation system:
 
-A state machine embedded within the WriteRoutine coroutine manages the prismatic joint ($d_3$) to ensure efficient drawing:
+### Letter Definition Structure:
 
-- Continuity Check: Before starting a new stroke, the algorithm checks if the new starting point ($P_{start}$) is equal to the end point of the previous stroke ($P_{end}$). This is done using a positional tolerance ($\approx 0.01\text{m}$).
+**Example: Letter 'A'**
+```csharp
+case 'A':
+    strokes.Add(Stroke(0,0, 2,5));        // Left diagonal
+    strokes.Add(Stroke(2,5, 4,0));        // Right diagonal
+    strokes.Add(Stroke(1,2.5f, 3,2.5f));  // Horizontal bar
+    break;
+```
 
-- Discontinuous Motion (Lift Required): If $P_{start} \neq P_{end}$, the robot performs a lift-and-move sequence:
+### Stroke Creation Helpers:
 
-   - Pen Up: Move $d_3$ to $\text{penUpHeight}$. ($\text{TrailRenderer}$ disabled).
+**1. Linear Stroke Generator**
+```csharp
+List<Vector3> Stroke(params float[] coords)
+{
+    List<Vector3> points = new List<Vector3>();
+    for (int i = 0; i < coords.Length; i += 2)
+    {
+        points.Add(new Vector3(coords[i], 0, coords[i+1]));
+    }
+    return points;
+}
+```
 
-   - Hover: Move end-effector (GhostTarget) to $P_{start}$.
+**2. Parametric Arc Generator**
+```csharp
+List<Vector3> CreateArc(float cx, float cz, float w, float h, 
+                        float startAng, float endAng, int res = 20)
+{
+    List<Vector3> points = new List<Vector3>();
+    for (int i = 0; i <= res; i++)
+    {
+        float t = i / (float)res;
+        float ang = Mathf.Lerp(startAng, endAng, t) * Mathf.Deg2Rad;
+        
+        float x = cx + Mathf.Cos(ang) * w;
+        float z = cz + Mathf.Sin(ang) * h;
+        
+        points.Add(new Vector3(x, 0, z));
+    }
+    return points;
+}
+```
 
-   - Pen Down: Move $d_3$ to $\text{penDownHeight}$. ($\text{TrailRenderer}$ enabled).
+**Example: Letter 'S' Implementation**
+```csharp
+case 'S':
+    // Top arc: starts at 45°, goes counterclockwise to 270°
+    strokes.Add(CreateArc(2f, 3.75f, 2f, 1.25f, 45, 270));
+    
+    // Bottom arc: starts at 90°, goes clockwise to -135°
+    strokes.Add(CreateArc(2f, 1.25f, 2f, 1.25f, 90, -135));
+    break;
+```
 
-- Continuous Motion (Draw Directly): If $P_{start} = P_{end}$, the motion controller skips the Pen Up/Hover/Pen Down sequence, allowing the robot to transition immediately into drawing the next segment, eliminating unnecessary vertical movements and saving execution time.
+**Example: Letter 'G' Implementation**
+```csharp
+case 'G':
+    // Main circular arc: 45° to 360° (315° span)
+    strokes.Add(CreateArc(2.5f, 2.5f, 2.5f, 2.5f, 45, 360));
+    
+    // Horizontal hook connecting at (5.0, 2.5)
+    strokes.Add(Stroke(5.0f, 2.5f, 2.5f, 2.5f));
+    break;
+```
+
+### Coordinate Processing Pipeline:
+
+```csharp
+private List<Vector3> ProcessPoints(List<Vector3> rawPoints, float xOffset)
+{
+    List<Vector3> processed = new List<Vector3>();
+    foreach (Vector3 p in rawPoints)
+    {
+        // Apply character offset and scale
+        float x = (p.x + xOffset) * scale;
+        float z = p.z * scale;
+        
+        // Transform to world coordinates
+        Vector3 worldPos = transform.TransformPoint(
+            new Vector3(x, 0, z) + offset
+        );
+        processed.Add(worldPos);
+    }
+    return processed;
+}
+```
+
+## Motion Control Strategy
+
+The `RobotWriter.cs` implements an optimized pen control algorithm:
+
+### Stroke Continuity Detection:
+
+```csharp
+// Check if next stroke connects to current stroke
+bool nextStrokeIsContinuous = false;
+if (strokeIndex < strokes.Count - 1)
+{
+    Vector3 currentEnd = currentStroke[currentStroke.Count - 1];
+    Vector3 nextStart = strokes[strokeIndex + 1][0];
+    
+    // Compare positions (ignoring height)
+    Vector3 endFlat = new Vector3(currentEnd.x, 0, currentEnd.z);
+    Vector3 nextStartFlat = new Vector3(nextStart.x, 0, nextStart.z);
+    
+    if (Vector3.Distance(endFlat, nextStartFlat) < 0.01f)
+    {
+        nextStrokeIsContinuous = true;
+    }
+}
+```
+
+### State Machine Logic:
+
+```csharp
+// Determine if pen is already at start position
+bool isAlreadyAtStartPoint = Vector3.Distance(
+    scaraController.targetObj.position, 
+    new Vector3(startP.x, scaraController.targetObj.position.y, startP.z)
+) < 0.01f;
+
+// State 1: Move to start position (if not already there)
+if (strokeIndex > 0 && !isAlreadyAtStartPoint)
+{
+    yield return MoveTo(new Vector3(startP.x, penUpHeight, startP.z));
+}
+else if (strokeIndex == 0)
+{
+    // First stroke always starts at safe height
+    yield return MoveTo(new Vector3(startP.x, penUpHeight, startP.z));
+}
+
+// State 2: Lower pen to drawing surface
+if (!isAlreadyAtStartPoint)
+{
+    yield return MoveTo(new Vector3(startP.x, penDownHeight, startP.z));
+}
+if (_trail) _trail.emitting = true;
+
+// State 3: Draw stroke
+for (int i = 1; i < currentStroke.Count; i++)
+{
+    Vector3 p = currentStroke[i];
+    yield return MoveTo(new Vector3(p.x, penDownHeight, p.z));
+}
+
+// State 4: Lift pen (only if next stroke is discontinuous)
+if (!nextStrokeIsContinuous)
+{
+    if (_trail) _trail.emitting = false;
+    yield return MoveTo(new Vector3(endP.x, penUpHeight, endP.z));
+}
+```
+
+### Smooth Interpolation:
+
+```csharp
+IEnumerator MoveTo(Vector3 destination)
+{
+    Transform target = scaraController.targetObj;
+    float dist = Vector3.Distance(target.position, destination);
+    if (writeSpeed <= 0.1f) writeSpeed = 1f;
+
+    float duration = dist / writeSpeed;
+    float elapsed = 0f;
+    Vector3 start = target.position;
+
+    while (elapsed < duration)
+    {
+        // Linear interpolation with time-based progression
+        target.position = Vector3.Lerp(start, destination, elapsed / duration);
+        elapsed += Time.deltaTime;
+        yield return null; // Wait for next frame
+    }
+    
+    // Ensure exact final position
+    target.position = destination;
+}
+```
+
+**Benefits of This Approach:**
+- **Reduced Air Time**: Eliminates unnecessary pen lifts for connected strokes
+- **Smooth Motion**: Linear interpolation prevents jerky movements
+- **Frame-Independent**: Movement speed remains consistent regardless of framerate
+- **Predictable Timing**: Duration is calculated deterministically from distance
 
 ---
+
 
 ## Testing and Results
 
